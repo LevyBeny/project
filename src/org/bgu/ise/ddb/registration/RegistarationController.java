@@ -67,19 +67,26 @@ public class RegistarationController extends ParentController{
 			HttpServletResponse response){
 		System.out.println(username+" "+password+" "+lastName+" "+firstName);
 
+		DateFormat df = new SimpleDateFormat("MM/dd/yyyy HH:mm:ss"); // Use to cast a date to string
+
 		try {
 			if (isExistUser(username)){
 				HttpStatus status = HttpStatus.CONFLICT;
 				response.setStatus(status.value());
 			}
+
+			Date now = Calendar.getInstance().getTime();
+			String date= df.format(now);
+
 			Jedis jedis=getJedisConnection();
 			Pipeline pp = jedis.pipelined();
 			pp.sadd("SUsers", username);
 			pp.hset(username, "password", password);
 			pp.hset(username, "firstName", firstName);
 			pp.hset(username, "lastName", lastName);
+			pp.hset(username, "regDate", date);
 			pp.sync();
-			
+
 			HttpStatus status = HttpStatus.OK;
 			response.setStatus(status.value());
 			jedis.close();			
@@ -123,11 +130,20 @@ public class RegistarationController extends ParentController{
 			@RequestParam("password")    String password) throws IOException{
 		System.out.println(username+" "+password);
 		boolean result = false;
-		//:TODO your implementation
-
-
+		try{
+			if (isExistUser(username)){
+				Jedis jedis =getJedisConnection();
+				if (password.equals(jedis.hget(username, "password")))
+					result=true;
+				jedis.close();
+			}
+			else
+				result = false;
+		}
+		catch (Exception e){
+			e.printStackTrace();
+		}
 		return result;
-
 	}
 
 	/**
@@ -140,8 +156,25 @@ public class RegistarationController extends ParentController{
 	public int getNumberOfRegistredUsers(@RequestParam("days") int days) throws IOException{
 		System.out.println(days+"");
 		int result = 0;
-		//:TODO your implementation
+		DateFormat df = new SimpleDateFormat("MM/dd/yyyy HH:mm:ss"); // Use to cast a date to string
 
+		try{
+			Jedis jedis = getJedisConnection();
+
+			Long time_milsec = System.currentTimeMillis() - 1000*60*60*24*days;
+			Date before_days= new Date(time_milsec);
+
+			Set<String> all_users = jedis.smembers("SUsers");
+			for (String username : all_users){
+				Date reg_date = df.parse(jedis.hget(username, "reg_date"));
+				long diff = reg_date.getTime() - before_days.getTime();
+				if(diff >= 0 )
+					result++;
+			}
+		}
+		catch (ParseException e) {
+			e.printStackTrace();
+		}
 		return result;
 
 	}
@@ -154,10 +187,25 @@ public class RegistarationController extends ParentController{
 	@ResponseBody
 	@org.codehaus.jackson.map.annotate.JsonView(User.class)
 	public  User[] getAllUsers(){
-		//:TODO your implementation
-		User u = new User("alex", "alex", "alex");
-		System.out.println(u);
-		return new User[]{u};
+		User[] result=null;
+		try{
+			Jedis jedis=getJedisConnection();
+			Set<String> all_users = jedis.smembers("SUsers");
+			result=new User[all_users.size()];
+			int i=0;
+			for (String username : all_users){
+				User u = new User(username, jedis.hget(username, "firstName"), jedis.hget(username, "lastName"));
+				System.out.println(u);
+				result[i]=u;
+				i++;
+			}
+			
+		}catch(Exception e){
+			e.printStackTrace();
+			return null;
+		}
+
+		return result;
 	}
 
 
