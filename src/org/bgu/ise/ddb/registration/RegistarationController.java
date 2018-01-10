@@ -9,16 +9,9 @@ import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 
-import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
-
-import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
-import java.util.List;
-import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.TimeUnit;
 
 import org.bgu.ise.ddb.ParentController;
 import org.bgu.ise.ddb.User;
@@ -34,10 +27,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
-import redis.clients.jedis.JedisPoolConfig;
 import redis.clients.jedis.Pipeline;
-import redis.clients.jedis.ScanParams;
-import redis.clients.jedis.ScanResult;
 import redis.clients.jedis.exceptions.JedisConnectionException;
 
 /**
@@ -78,7 +68,7 @@ public class RegistarationController extends ParentController{
 			Date now = Calendar.getInstance().getTime();
 			String date= df.format(now);
 
-			Jedis jedis=getJedisConnection();
+			Jedis jedis= new Jedis("132.72.65.45");//getJedisConnection();
 			Pipeline pp = jedis.pipelined();
 			pp.sadd("SUsers", username);
 			pp.hset(username, "password", password);
@@ -86,6 +76,8 @@ public class RegistarationController extends ParentController{
 			pp.hset(username, "lastName", lastName);
 			pp.hset(username, "regDate", date);
 			pp.sync();
+			
+			System.out.println("Registered User: "+username+" "+firstName+" "+lastName+" "+date+" ");
 
 			HttpStatus status = HttpStatus.OK;
 			response.setStatus(status.value());
@@ -106,11 +98,14 @@ public class RegistarationController extends ParentController{
 	 */
 	@RequestMapping(value = "is_exist_user", method={RequestMethod.GET})
 	public boolean isExistUser(@RequestParam("username") String username) throws IOException{
-		System.out.println(username);
 		boolean result = false;
 		try{
-			Jedis jedis= getJedisConnection();
+			Jedis jedis= new Jedis("132.72.65.45");//getJedisConnection();
 			result= jedis.sismember("SUsers",username);
+			if (result)
+				System.out.println("User Name exist: "+username);
+			else
+				System.out.println("User Name do not exist: "+username);
 			jedis.close();
 		}
 		catch (Exception e) {
@@ -132,7 +127,7 @@ public class RegistarationController extends ParentController{
 		boolean result = false;
 		try{
 			if (isExistUser(username)){
-				Jedis jedis =getJedisConnection();
+				Jedis jedis= new Jedis("132.72.65.45");//getJedisConnection();
 				if (password.equals(jedis.hget(username, "password")))
 					result=true;
 				jedis.close();
@@ -143,6 +138,10 @@ public class RegistarationController extends ParentController{
 		catch (Exception e){
 			e.printStackTrace();
 		}
+		if (result)
+			System.out.println("User validated: "+username);
+		else
+			System.out.println("User not validated: "+username);
 		return result;
 	}
 
@@ -159,18 +158,20 @@ public class RegistarationController extends ParentController{
 		DateFormat df = new SimpleDateFormat("MM/dd/yyyy HH:mm:ss"); // Use to cast a date to string
 
 		try{
-			Jedis jedis = getJedisConnection();
+			Jedis jedis= new Jedis("132.72.65.45");//getJedisConnection();
 
 			Long time_milsec = System.currentTimeMillis() - 1000*60*60*24*days;
 			Date before_days= new Date(time_milsec);
 
 			Set<String> all_users = jedis.smembers("SUsers");
 			for (String username : all_users){
-				Date reg_date = df.parse(jedis.hget(username, "reg_date"));
+				String s_date=jedis.hget(username, "regDate");
+				Date reg_date = df.parse(s_date);
 				long diff = reg_date.getTime() - before_days.getTime();
 				if(diff >= 0 )
 					result++;
 			}
+			jedis.close();
 		}
 		catch (ParseException e) {
 			e.printStackTrace();
@@ -189,7 +190,7 @@ public class RegistarationController extends ParentController{
 	public  User[] getAllUsers(){
 		User[] result=null;
 		try{
-			Jedis jedis=getJedisConnection();
+			Jedis jedis= new Jedis("132.72.65.45");//getJedisConnection();
 			Set<String> all_users = jedis.smembers("SUsers");
 			result=new User[all_users.size()];
 			int i=0;
@@ -199,6 +200,7 @@ public class RegistarationController extends ParentController{
 				result[i]=u;
 				i++;
 			}
+			jedis.close();
 			
 		}catch(Exception e){
 			e.printStackTrace();
